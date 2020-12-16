@@ -1,15 +1,11 @@
 # usher
 
-A Clojure library WITH YOUR DESCRIPTION.
-
-## Usage
-
-FIXME
-
 ## License
 
-Copyright © 2020 YOUR NAME
+Copyright © 2020 Stephen E. Miner
 
-Distributed under the Eclipse Public License, same as Clojure.
+private repo, no one is allowed to read or copy this
 
 # usher
+
+out

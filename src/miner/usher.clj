@@ -164,12 +164,12 @@
 (defn all-nine? [bye pairsets]
   (= s9 (apply s/union #{bye} (map set pairsets))))
 
-(defn matchups [bye pairsets]
+(defn matchups [bye pairsets prev used]
   (when (all-nine? bye pairsets)
     (let [[a b c d] pairsets
-          used (set pairsets)]
-    (list (conj (vec pairsets) used)
-          [b c a d used]))))
+          used (into used pairsets)]
+      (list (conj (into prev pairsets) used)
+            (conj (into prev [b c a d]) used)))))
 
 
 ;;; BUT need to filter pairs that overlap!  Might be easier as bits
@@ -180,17 +180,113 @@
 (defn extend-court-assignment [assignment bye]
   (let [used (peek assignment)
         prev (pop assignment)]
-    (into prev
-          (mapcat #(matchups bye %))
-          (mc/combinations (s/difference (outpairings bye) used) 4))))
+    (mapcat #(matchups bye % prev used)
+            (mc/combinations (s/difference (outpairings bye) used) 4))))
+
+;;; doesn't check on opponents
+;;; probably has lots of isomorphic solutions
+;;; over 1 million solutions
+
+(defn TOO-BIG-generate-sched []
+  (loop [bye 1 assignments [[#{}]]]
+    (if (> bye 9)
+      assignments
+      (do
+        (println)
+        (println "pre Bye " bye)
+        (clojure.pprint/pprint (take 3 assignments))
+        (println "done " bye)
+        (println)
+
+        (recur (inc bye) (mapcat #(extend-court-assignment % bye) assignments))))))
 
 
-;; (defn generate-sched []
-;;   (reduce (fn [res bye]
-;;             (into res
-;;                 (assoc bye (generate-court-assignments (:used res) bye))
-;;                 (assoc :used  WRONG need to append next round to each of the previous
-;;              )
-;;             [[#{}]]
-;;             (range 1 10)))
-;; 
+;;; intuiton (unverified) -- these are the fundamental orderings.  Other permutations are
+;;; rotations or reflections and offsets of these orderings.  The idea is to substitute 8
+;;; for the bye player.  Or do you have to substitute a full 8?  to get all pairs?
+
+(def games8
+  [[0 1 2 3 4 5 6 7]
+   [0 2 1 3 4 5 6 7]
+   [0 1 2 3 4 6 5 7]
+   [0 2 1 3 4 6 5 7]
+
+   [0 1 4 5 2 3 6 7]
+   [0 2 4 5 1 3 6 7]
+   [0 1 4 6 2 3 5 7]
+   [0 2 4 6 1 3 5 7]
+   ])
+
+(def sets8
+  (map #(map set (partition 2 (map set (partition 2 %)))) games8))
+
+
+
+;;; another way to start from pairs
+;;; choose one pair, choose second pair from pair-1 outpairs (27)
+;;; keep track of "used" pairs as you go to cut down possibles
+;;; keep track of opponent count per player as you go -- two allowed
+;;; that should help prune pairs in games
+;;; need to back track when stuck
+;;; state is vector of games (two pairs each), total used pairs, opp map
+
+
+
+
+;;; Thinking some more 
+;;;  9 choose 8
+
+;;; how many ways of arranging 8?  9 subs for one of them for each round
+;;; probably better to start with pairs
+;;; add constraint that init pair limits next, then add another one at a time
+;;; backtrack to get all possible arrangements for a single round
+;;;
+
+
+;;; keep track of opp as vector of player-opp coord, starts all zero
+;;; should end all 2 except for self which is zero
+(def opp-init (vec (repeat 9 (vec (repeat 9 0)))))
+
+;;; playing once with each other is guaranteed by initial pairs
+
+
+(comment
+
+(require '[clojure.set :as s])
+(require '[clojure.math.combinatorics :as mc])
+
+
+(mc/count-combinations (range 8) 4)
+70
+user=> (mc/count-combinations (range 9) 8)
+9
+
+
+(mc/count-permutations (range 9))
+362880
+
+(take 20 (mc/permutations (range 8)))
+
+([0 1 2 3 4 5 6 7]
+ [0 1 2 3 4 5 7 6]
+ [0 1 2 3 4 6 5 7]
+ [0 1 2 3 4 6 7 5]
+ [0 1 2 3 4 7 5 6]
+ [0 1 2 3 4 7 6 5]
+ [0 1 2 3 5 4 6 7]
+ [0 1 2 3 5 4 7 6]
+ [0 1 2 3 5 6 4 7]
+ [0 1 2 3 5 6 7 4]
+ [0 1 2 3 5 7 4 6]
+ [0 1 2 3 5 7 6 4]
+ [0 1 2 3 6 4 5 7]
+ [0 1 2 3 6 4 7 5]
+ [0 1 2 3 6 5 4 7]
+ [0 1 2 3 6 5 7 4]
+ [0 1 2 3 6 7 4 5]
+ [0 1 2 3 6 7 5 4]
+ [0 1 2 3 7 4 5 6]
+ [0 1 2 3 7 4 6 5])
+
+
+)
