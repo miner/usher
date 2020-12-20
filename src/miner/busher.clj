@@ -165,8 +165,9 @@
 
 
 
-(defn as-int-set [icoll]
-  (into (i/dense-int-set) icoll))
+(defn as-int-set
+  ([icoll] (into (i/dense-int-set) icoll))
+  ([xform coll] (into (i/dense-int-set) xform coll)))
 
 
 
@@ -193,13 +194,13 @@
 ;;; all possible pairing -- we know we need each one once  -- 9 players => 36 pairs
 (def pairings (mapv #(reduce bit-set 0 %) (mc/combinations (range 9) 2)))
 
-(def all-pairs (into (s/dense-int-set) pairings))
+(def all-pairs (as-int-set pairings))
 
 ;; given a player number, we know the other allowed pairs -- 28 per player
 (def outpairings
   (into (i/int-map)
         (for [a (range 9)]
-          [a (as-int-set (remove #(bit-test % a) pairings))])))
+          [a (as-int-set (remove #(bit-test % a)) pairings)])))
 
 (def inpairings
   (into (i/int-map)
@@ -276,7 +277,8 @@
       (inc-opp c d)))
 
 
-
+(defn all-nine? [bye pairsets]
+  (= 511 (reduce bit-or (bit-set 0 bye) pairsets)))
 
 ;;; FIXME do you really need to remix games?
 (defn confirm-matchups [bye pairsets assignment]
@@ -316,6 +318,16 @@
 ;;; no overlapping pairs (by construction)
 ;;; That is, write a program to generat the right constraints, then let taran solve.
 ;;; Might be partial and need fix up.
+
+;;; 36 pairs
+;;; 378 legal games
+
+
+
+
+
+;; :assigned [a b c]
+;; :available int-set pairs
 
 
 (defn dfgen
@@ -403,10 +415,34 @@
 
 
 
+
+;;; 378
+(def legal-games
+  (keep (fn [[a b]] (when (zero? (bit-and a b)) [a b]))
+        (mc/combinations all-pairs 2)))
+
+;;; 2835
+(def legal-rounds
+  (keep (fn [[[a b] [c d]]] (when (= 8 (bs/bcount (bit-or a b c d))) [a b c d]))
+        (mc/combinations legal-games 2)))
+
+;;; 315 per bye
+(defn legal-round [bye]
+  (filter (fn [g] (= 511 (reduce bit-or (bit-set 0 bye) g)))
+          legal-rounds))
+
+
+(def legal-rounds-per-bye (mapv legal-round (range 9)))
+
+(def group-legal-rounds (group-by #(Long/numberOfTrailingZeros (apply bit-and-not 511 %))
+                                  legal-rounds))
+
+
 (comment
 
 (require '[clojure.set :as s])
 (require '[clojure.math.combinatorics :as mc])
+(require '[miner.bitset :as bs])
 
 
 (mc/count-combinations (range 8) 4)
