@@ -1,6 +1,8 @@
-(ns miner.usher
+(ns miner.busher
   (:require
    clojure.pprint
+   [miner.bitset :as bs]
+   [clojure.data.int-map :as i]
    [clojure.set :as s]
    [clojure.math.combinatorics :as c]
    [tarantella.core :as t]))
@@ -50,6 +52,62 @@
    [8 :H  [:I :G :B :E]  [:C :D :A :F]]
    [9 :I  [:G :H :C :F]  [:A :E :B :D]]])
 
+
+(defn convert-to-knum [nine-sol-raw]
+  (let [knum (fn [k] (- (long (first (name k))) (dec (long \A))))]
+    (mapv (fn [[r b g1 g2]] [(mapv knum g1) (mapv knum g2)]) nine-sol-raw)))
+
+;;; players 1-9 no 0
+(def knum9 [[[2 3 4 7] [5 9 6 8]]
+            [[3 1 5 8] [6 7 4 9]]
+            [[1 2 6 9] [4 8 5 7]]
+            [[5 6 7 1] [8 3 9 2]]
+            [[6 4 8 2] [9 1 7 3]]
+            [[4 5 9 3] [7 2 8 1]]
+            [[8 9 1 4] [2 6 3 5]]
+            [[9 7 2 5] [3 4 1 6]]
+            [[7 8 3 6] [1 5 2 4]]])
+
+
+
+
+;;; Zero-based bit notation is vector of vector of longs where each long has two bits set
+;;; for players 0-8.  A round is a vector of 4 longs, representing two pairs of opponents.
+;;; [[A B C D] ...] represents pair A vs. B and C vs. D.  Altogether each round should be 8
+;;; unique bits, with bye matching round index (0-8).
+
+;; zero-based bits
+(defn convert-to-bits [nine-sol-raw]
+  (let [knum (fn [k] (- (long (first (name k))) (long \A)))]
+    (mapv (fn [[r b g1 g2]]
+            (->> (sequence (comp (map knum) (map #(bit-set 0 %))) (concat g1 g2))
+                (partition 2)
+                (mapv (fn [[a b]] (bit-or a b)))))
+          nine-sol-raw)))
+
+(defn verify-bits? [bits9]
+  (every? zero? (map-indexed (fn [i r] (reduce bit-and-not (bit-clear 511 i) r)) bits9)))
+
+;; players 0-8 in pairs of bits
+(def bits9 [[6 72 272 160]
+            [5 144 96 264]
+            [3 288 136 80]
+            [48 65 132 258]
+            [40 130 257 68]
+            [24 260 66 129]
+            [384 9 34 20]
+            [320 18 12 33]
+            [192 36 17 10]])
+
+
+(defn as-pair [pbits]
+  [(Long/numberOfTrailingZeros (Long/highestOneBit pbits))
+   (Long/numberOfTrailingZeros (Long/lowestOneBit pbits))])
+
+;; should be faster than (bs/bindices pbits)
+
+
+
 (def inc0 (fnil inc 0))
 
 (defn inc-stat [stats keypath]
@@ -58,18 +116,17 @@
 
 (defn add-game-stats [stats [a b c d]]
   (reduce inc-stat stats
-          [[a :north] [b :north] [c :south] [d :south]
-           [a :with b] [a :against c] [a :against d]
+          [[a :with b] [a :against c] [a :against d]
            [b :with a] [b :against c] [b :against d]
            [c :with d] [c :against a] [c :against b]
            [d :with c] [d :against a] [d :against b]]))
 
 (defn stats [rows]
-  (reduce (fn [stats [round bye game1 game2]]
-            (-> stats
-                (inc-stat [bye :bye])
-                (add-game-stats game1)
-                (add-game-stats game2)))
+  (reduce-kv (fn [stats bye [a b c d]]
+               (-> stats
+                   (inc-stat [bye :bye])
+                   (add-game-stats (into (as-pair a) (as-pair b)))
+                   (add-game-stats (into (as-pair c) (as-pair d)))))
           {}
           rows))
 
@@ -102,19 +159,17 @@
 
 
 #_
-(verify-stats? (stats nine-sol-raw))
+(verify-stats? (stats bits9))
 
 
-#_
- (map (juxt #(keyword (str (char (+ % 97)))) inc) (range 9))
- ;;=> ([:a 1] [:b 2] [:c 3] [:d 4] [:e 5] [:f 6] [:g 7] [:h 8] [:i 9])
 
- #_
- {:round 1
-  :court 1
-  :ateam [:B :C]
-  :bteam [:D :E]
-  :bye :A}
+
+
+(defn as-int-set [icoll]
+  (into (i/dense-int-set) icoll))
+
+
+
 
 
 
@@ -124,103 +179,41 @@
 ;; 4 per court
 ;; N rounds
 ;; (rem N 4) get bye per round
-
-(defn needed-courts [n]
-  (quot n 4))
-
-(defn bye-size [n]
-  (rem n 4))
+;;;;;; NEED TO THINK MORE ABOUT THIS
+;;;;;;  maybe search for allowed pairs first, then verify other stats????
 
 
-;; round player court
+
+
+
 
 ;; for easy reference
 (require '[clojure.math.combinatorics :as mc])
 
 ;;; all possible pairing -- we know we need each one once  -- 9 players => 36 pairs
-(def pairings (mapv set (mc/combinations (range 1 10) 2)))
+(def pairings (mapv #(reduce bit-set 0 %) (mc/combinations (range 9) 2)))
+
+(def all-pairs (into (s/dense-int-set) pairings))
 
 ;; given a player number, we know the other allowed pairs -- 28 per player
 (def outpairings
-  (into {}
-        (for [a (range 1 10)]
-          [a (set (remove #(get % a) pairings))])))
+  (into (i/int-map)
+        (for [a (range 9)]
+          [a (as-int-set (remove #(bit-test % a) pairings))])))
 
 (def inpairings
-  (into {}
-        (for [a (range 1 10)]
-          [a (set (for [b (range 1 10) :when (not= a b)] #{a b}))])))
+  (into (i/int-map)
+        (for [a (range 9)]
+          [a (as-int-set (for [b (range 9) :when (not= a b)] (-> 0 (bit-set a) (bit-set b))))])))
 
 ;; for nine players, 21 outpairs per pair
 (defn outpairs [pair]
-  (apply s/intersection (map #(get outpairings %) pair)))
+  (apply i/intersection (map #(get outpairings %) (as-pair pair))))
 
-(def poutpairs  (zipmap pairings (map outpairs pairings)))
-
-
-;;; SEM other idea: nine players, nine bits -- maybe bit patterns would be faster
-
-
-(def s9 #{1 2 3 4 5 6 7 8 9})
-
-(defn all-nine? [bye pairsets]
-  (= s9 (apply s/union #{bye} (map set pairsets))))
-
-(defn matchups [bye pairsets prev used]
-  (when (all-nine? bye pairsets)
-    (let [[a b c d] pairsets
-          used (into used pairsets)]
-      (list (conj (into prev pairsets) used)
-            (conj (into prev [b c a d]) used)))))
-
-
-;;; BUT need to filter pairs that overlap!  Might be easier as bits
+(def poutpairs (into (i/int-map) (zipmap pairings (map outpairs pairings))))
 
 
 
-
-(defn extend-court-assignment [assignment bye]
-  (let [used (peek assignment)
-        prev (pop assignment)]
-    (mapcat #(matchups bye % prev used)
-            (mc/combinations (s/difference (outpairings bye) used) 4))))
-
-;;; doesn't check on opponents
-;;; probably has lots of isomorphic solutions
-;;; over 1 million solutions
-
-(defn TOO-BIG-generate-sched []
-  (loop [bye 1 assignments [[#{}]]]
-    (if (> bye 9)
-      assignments
-      (do
-        (println)
-        (println "pre Bye " bye)
-        (clojure.pprint/pprint (take 3 assignments))
-        (println "done " bye)
-        (println)
-
-        (recur (inc bye) (mapcat #(extend-court-assignment % bye) assignments))))))
-
-
-;;; intuiton (unverified) -- these are the fundamental orderings.  Other permutations are
-;;; rotations or reflections and offsets of these orderings.  The idea is to substitute 8
-;;; for the bye player.  Or do you have to substitute a full 8?  to get all pairs?
-
-(def games8
-  [[0 1 2 3 4 5 6 7]
-   [0 2 1 3 4 5 6 7]
-   [0 1 2 3 4 6 5 7]
-   [0 2 1 3 4 6 5 7]
-
-   [0 1 4 5 2 3 6 7]
-   [0 2 4 5 1 3 6 7]
-   [0 1 4 6 2 3 5 7]
-   [0 2 4 6 1 3 5 7]
-   ])
-
-(def sets8
-  (map #(map set (partition 2 (map set (partition 2 %)))) games8))
 
 
 
@@ -247,8 +240,8 @@
 
 ;;; keep track of opp as vector of player-opp coord, starts all zero
 ;;; should end all 2 except for self which is zero
-;;;   Actually 0-9 but players are 1-9
-(def opp-init (vec (repeat 10 (vec (repeat 10 0)))))
+;;; zero-based, players 0-8
+(def opp-init (vec (repeat 9 (vec (repeat 9 0)))))
 
 ;;; playing once with each other is guaranteed by initial pairs
 
@@ -272,8 +265,8 @@
     (update-in opps coord inc)))
 
 (defn inc-opp [opps a b]
-  (let [[a1 a2] (seq a)
-        [b1 b2] (seq b)]
+  (let [[a1 a2] (as-pair a)
+        [b1 b2] (as-pair b)]
     (reduce (whilst inc-max2) opps [[a1 b1] [a1 b2] [a2 b1] [a2 b2]
                                     [b1 a1] [b1 a2] [b2 a1] [b2 a2]])))
     
@@ -283,6 +276,9 @@
       (inc-opp c d)))
 
 
+
+
+;;; FIXME do you really need to remix games?
 (defn confirm-matchups [bye pairsets assignment]
   (when (all-nine? bye pairsets)
     (let [prev (:assigned assignment)
@@ -310,6 +306,35 @@
 (defn extend-assignment [assignment bye]
   (mapcat #(confirm-matchups bye % assignment)
           (mc/combinations (s/difference (outpairings bye) (:used assignment)) 4)))
+
+
+
+;;; SEM IDEA: vector of bitpairs
+;;; tarantella for layout of 0-35 bitpairs
+;;; figure out additional constraints on individual
+;;; each row could be one pair (36) on one court side (four)
+;;; no overlapping pairs (by construction)
+;;; That is, write a program to generat the right constraints, then let taran solve.
+;;; Might be partial and need fix up.
+
+
+(defn dfgen
+  ([] (dfgen 9))
+  ([limit]
+   (loop [stack [{:available all-pairs :opp opp-init :assigned []}]]
+     (if-let [assignment (peek stack)]
+       (let [{:keys [available opp assigned]} assignment
+             bye (quot (count assigned) 4)
+             candidates (s/intersection available (outpairings bye))]
+         (if (>= bye limit)
+           assignment
+           (let [next4 (take 4 candidates)]
+             )))))))
+         
+
+
+
+
 
 
 ;;; gen9 returns first solution.  It takes a long time.  Very fast until 8, then slow for 8
