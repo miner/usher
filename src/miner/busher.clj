@@ -438,6 +438,24 @@
                                   legal-rounds))
 
 
+
+
+(defn niner []
+  (first
+   (for [a (get group-legal-rounds 0) :let [oppa (assign-opps opp-init a)]
+         b (get group-legal-rounds 1) :let [oppb (assign-opps oppa b)]
+         c (get group-legal-rounds 2) :let [oppc (assign-opps oppb c)]
+         d (get group-legal-rounds 3) :let [oppd (assign-opps oppc d)]
+         e (get group-legal-rounds 4) :let [oppe (assign-opps oppd e)]
+         f (get group-legal-rounds 5) :let [oppf (assign-opps oppe f)]
+         g (get group-legal-rounds 6) :let [oppg (assign-opps oppf g)]
+         h (get group-legal-rounds 7) :let [opph (assign-opps oppg h)]
+         i (get group-legal-rounds 8) :let [oppi (assign-opps opph i)] :when oppi]
+     [a b c d e f g h i])))
+
+
+
+
 (comment
 
 (require '[clojure.set :as s])
