@@ -35,9 +35,10 @@
 ;;; players labeled 0-8
 ;;; take advantage of bits and int-set for better performance
 
+;;; convert two bits back to pair of indices
 (defn as-pair [pbits]
-  [(Long/numberOfTrailingZeros (Long/highestOneBit pbits))
-   (Long/numberOfTrailingZeros (Long/lowestOneBit pbits))])
+  [(Long/numberOfTrailingZeros pbits)
+   (- 63 (Long/numberOfLeadingZeros pbits))])
 
 (def inc0 (fnil inc 0))
 
@@ -63,8 +64,6 @@
 
 (defn valid-player? [player pstats]
   (and (= (:bye pstats) 1)
-       #_ (= (:north pstats) 4)
-       #_ (= (:south pstats) 4)
        (= (count (:with pstats)) 8)
        (= (count (:against pstats)) 8)
        (every? #(= % 1) (vals (:with pstats)))
@@ -81,15 +80,6 @@
   ([icoll] (into (i/dense-int-set) icoll))
   ([xform coll] (into (i/dense-int-set) xform coll)))
 
-;;; all possible pairing -- we know we need each one once  -- 9 players => 36 pairs
-;;; encoding a pair as two bits set in a long
-(def all-pairs (as-int-set (map #(reduce bit-set 0 %) (mc/combinations (range 9) 2))))
-
-
-;;; keep track of opp as vector of player-opp coord, starts all zero
-;;; should end all 2 except for self which is zero
-;;; zero-based, players 0-8
-(def opp-init (vec (repeat 9 (vec (repeat 9 0)))))
 
 ;;; playing once with each other is guaranteed by initial pairs
 
@@ -128,32 +118,27 @@
       (inc-opp c d)))
 
 
-
-;;; 378
-(def legal-games
-  (keep (fn [[a b]] (when (zero? (bit-and a b)) [a b]))
-        (mc/combinations all-pairs 2)))
-
-;;; 2835
-(def legal-rounds
-  (keep (fn [[[a b] [c d]]] (when (= 8 (bs/bcount (bit-or a b c d))) [a b c d]))
-        (mc/combinations legal-games 2)))
-
-;;; 315 per bye
-(defn legal-round [bye]
-  (filter (fn [g] (= 511 (reduce bit-or (bit-set 0 bye) g)))
-          legal-rounds))
+;;; all possible pairing -- we know we need each one once  -- 9 players => 36 pairs
+;;; encoding a pair as two bits set in a long
 
 
-(def legal-rounds-per-bye (mapv legal-round (range 9)))
 
-(def group-legal-rounds (group-by #(Long/numberOfTrailingZeros (apply bit-and-not 511 %))
-                                  legal-rounds))
-
-
+;;; keep track of opp as vector of player-opp coord, starts all zero
+;;; should end all 2 except for self which is zero
+;;; zero-based, players 0-8
 
 
 (defn lazy-niners []
+  (let [all-pairs (as-int-set (map #(reduce bit-set 0 %) (mc/combinations (range 9) 2)))
+        opp-init (vec (repeat 9 (vec (repeat 9 0))))
+        legal-games  (keep (fn [[a b]] (when (zero? (bit-and a b)) [a b]))
+                           (mc/combinations all-pairs 2))
+        legal-rounds  (keep (fn [[[a b] [c d]]]
+                              (when (= 8 (bs/bcount (bit-or a b c d))) [a b c d]))
+                            (mc/combinations legal-games 2))
+        group-legal-rounds (group-by #(Long/numberOfTrailingZeros (apply bit-and-not 511 %))
+                                  legal-rounds)]
+
    (for [a (get group-legal-rounds 0)
          :let [ua (as-int-set a)
                oppa (assign-opps opp-init a)] :when oppa
@@ -204,10 +189,23 @@
          :when (not-any? uh i)
          :when (assign-opps opph i)]
 
-     [a b c d e f g h i]))
+     [a b c d e f g h i])))
 
 ;; about 6.5 sec on my iMac
 (defn niner [] (first (lazy-niners)))
+
+
+;;; one-based for display
+(defn pair-str [pbits]
+  (str (inc (Long/numberOfTrailingZeros (Long/lowestOneBit pbits))) "+"
+       (inc (Long/numberOfTrailingZeros (Long/highestOneBit pbits)))))
+
+(defn print-sched [niner]
+  (println "Bye   Court 1        Court 2")
+  (doseq [[a b c d i] (map-indexed #(conj %2 %) niner)]
+    (println (inc i) "   " (pair-str a) "vs" (pair-str b)
+             "   " (pair-str c) "vs" (pair-str d)))
+  (println))
 
 
 
