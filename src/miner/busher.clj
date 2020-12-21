@@ -440,19 +440,67 @@
 
 
 
-(defn niner []
-  (first
-   (for [a (get group-legal-rounds 0) :let [oppa (assign-opps opp-init a)] :when oppa
-         b (get group-legal-rounds 1) :let [oppb (assign-opps oppa b)] :when oppb
-         c (get group-legal-rounds 2) :let [oppc (assign-opps oppb c)] :when oppc
-         d (get group-legal-rounds 3) :let [oppd (assign-opps oppc d)] :when oppd
-         e (get group-legal-rounds 4) :let [oppe (assign-opps oppd e)] :when oppe
-         f (get group-legal-rounds 5) :let [oppf (assign-opps oppe f)] :when oppf
-         g (get group-legal-rounds 6) :let [oppg (assign-opps oppf g)] :when oppg
-         h (get group-legal-rounds 7) :let [opph (assign-opps oppg h)] :when opph
-         i (get group-legal-rounds 8) :let [oppi (assign-opps opph i)] :when oppi]
-     [a b c d e f g h i])))
+(defn niner-all []
+   (for [a (get group-legal-rounds 0)
+         :let [ua (as-int-set a)
+               oppa (assign-opps opp-init a)] :when oppa
 
+         b (get group-legal-rounds 1)
+         :when (not-any? ua b)
+         :let [ub (into ua b)
+               oppb (assign-opps oppa b)]
+         :when oppb
+         
+         c (get group-legal-rounds 2)
+         :when (not-any? ub c)
+         :let [uc (into ub c)
+               oppc (assign-opps oppb c)]
+         :when oppc
+         
+         d (get group-legal-rounds 3)
+         :when (not-any? uc d)
+         :let [ud (into uc d)
+               oppd (assign-opps oppc d)]
+         :when oppd
+
+         e (get group-legal-rounds 4)
+         :when (not-any? ud e)
+         :let [ue (into ud e)
+               oppe (assign-opps oppd e)]
+         :when oppe
+
+         f (get group-legal-rounds 5)
+         :when (not-any? ue f)
+         :let [uf (into ue f)
+               oppf (assign-opps oppe f)]
+         :when oppf
+
+         g (get group-legal-rounds 6)
+         :when (not-any? uf g)
+         :let [ug (into uf g)
+               oppg (assign-opps oppf g)]
+         :when oppg
+         
+         h (get group-legal-rounds 7)
+         :when (not-any? ug h)
+         :let [uh (into ug h)
+               opph (assign-opps oppg h)]
+         :when opph
+         
+         i (get group-legal-rounds 8)
+         :when (not-any? uh i)
+         :let [ui (into uh i)   ; FIXME not needed
+               oppi (assign-opps opph i)]
+         :when oppi]
+
+     [a b c d e f g h i]))
+
+(defn niner [] (first (niner-all)))
+
+;; not sure how many solutions, but at least 20.  100 was taking to long so I aborted
+
+
+#_ (every? #(verify-stats? (stats %)) (take 20 (niner-all)))
 
 
 
