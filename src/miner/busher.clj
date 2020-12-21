@@ -4,7 +4,7 @@
    [miner.bitset :as bs]
    [clojure.data.int-map :as i]
    [clojure.set :as s]
-   [clojure.math.combinatorics :as c]
+   [clojure.math.combinatorics :as mc]
    [tarantella.core :as t]))
 
 ;;; Challenge from Rob Usher
@@ -489,18 +489,24 @@
          
          i (get group-legal-rounds 8)
          :when (not-any? uh i)
-         :let [ui (into uh i)   ; FIXME not needed
-               oppi (assign-opps opph i)]
-         :when oppi]
+         :when (assign-opps opph i)]
 
      [a b c d e f g h i]))
 
+;; about 6.5 sec on my iMac
 (defn niner [] (first (niner-all)))
 
 ;; not sure how many solutions, but at least 20.  100 was taking to long so I aborted
 
 
 #_ (every? #(verify-stats? (stats %)) (take 20 (niner-all)))
+
+
+;;; SEM FIX ME -- write a macro that generates the FOR loop for N rounds given
+;;; group-legal-rounds
+;;;
+;;; Maybe rewrite whole thing and generate rounds on the fly since it's only needed once
+;;; A lot of this work is now done at load time.
 
 
 
