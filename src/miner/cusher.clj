@@ -35,15 +35,22 @@
 ;;; players labeled 0-8
 ;;; take advantage of bits and int-set for better performance
 
-(defn pairhigh [pbits]
+(defn high-bit [pbits]
   (- 63 (Long/numberOfLeadingZeros pbits)))
 
-(defn pairlow [pbits]
+(defn low-bit [pbits]
   (Long/numberOfTrailingZeros pbits))
 
 ;;; convert two bits back to pair of indices
 (defn as-pair [pbits]
-  [(pairlow pbits) (pairhigh pbits)])
+  [(low-bit pbits) (high-bit pbits)])
+
+
+;; questionable -- maybe faster than nested vectors
+(defn ind9 [a b]
+  (+ (* a 9) b))
+
+
 
 (def inc0 (fnil inc 0))
 
@@ -61,8 +68,8 @@
   (reduce-kv (fn [stats bye [a b c d]]
                (-> stats
                    (inc-stat [bye :bye])
-                   (add-game-stats (pairlow a) (pairhigh a) (pairlow b) (pairlow b))
-                   (add-game-stats (pairlow c) (pairhigh c) (pairlow d) (pairlow d))))
+                   (add-game-stats (low-bit a) (high-bit a) (low-bit b) (low-bit b))
+                   (add-game-stats (low-bit c) (high-bit c) (low-bit d) (low-bit d))))
           {}
           rows))
 
@@ -111,10 +118,10 @@
     (update-in opps coord inc)))
 
 (defn inc-opp [opps a b]
-  (let [a1 (pairlow a)
-        a2 (pairhigh a)
-        b1 (pairlow b)
-        b2 (pairhigh b)]
+  (let [a1 (low-bit a)
+        a2 (high-bit a)
+        b1 (low-bit b)
+        b2 (high-bit b)]
     (reduce (whilst inc-max2) opps [[a1 b1] [a1 b2] [a2 b1] [a2 b2]
                                     [b1 a1] [b1 a2] [b2 a1] [b2 a2]])))
     
@@ -129,6 +136,66 @@
 
 
 
+(defn experiment
+  ([] (experiment false))
+  ([flag]
+  (let [all-pairs (as-int-set (for [a (range 9) :let [pbits (bit-set 0 a)]
+                                    b (range (inc a) 9)]
+                                (bit-set pbits b)))
+        opp-init (vec (repeat 9 (vec (repeat 9 0))))
+        legal-games  (keep (fn [[a b]] (when (zero? (bit-and a b)) [a b (bit-or a b)]))
+                           (mc/combinations all-pairs 2))
+        legal-rounds #_ (keep (fn [[[a b ab] [c d cd]]]
+                                 (when (zero? (bit-and ab cd)) [a b c d]))
+                              (mc/combinations legal-games 2))
+                         (keep (fn [[ab cd]]
+                                 (when (zero? (bit-and (peek ab) (peek cd)))
+                                   [(nth ab 0) (nth ab 1) (nth cd 0) (nth cd 1)]))
+              (mc/combinations legal-games 2))
+        group-legal-rounds (group-by #(Long/numberOfTrailingZeros (apply bit-and-not 511 %))
+                                     legal-rounds)]
+    (assert (= (count all-pairs) 36))
+    (assert (= (sort (keys group-legal-rounds)) (range 9)))
+    (assert (every? #(= 315 (count %)) (vals group-legal-rounds)))
+    (when flag
+    (println "all-pairs:" (count all-pairs))
+    (println "legal-games:" (count legal-games))
+    (println "legal-rounds:" (count legal-rounds) "  per bye:" (quot (count legal-rounds) 9)))
+    true)))
+
+
+;; not faster with into/pop
+
+
+;;; only slightly faster with bit-or keys (instead of bye)
+
+(defn experiment2
+  ([] (experiment2 false))
+  ([flag]
+  (let [all-pairs (as-int-set (for [a (range 9) :let [pbits (bit-set 0 a)]
+                                    b (range (inc a) 9)]
+                                (bit-set pbits b)))
+        opp-init (vec (repeat 9 (vec (repeat 9 0))))
+        legal-games  (keep (fn [[a b]] (when (zero? (bit-and a b)) [a b (bit-or a b)]))
+                           (mc/combinations all-pairs 2))
+        legal-rounds  (keep (fn [[ab cd]]
+                              (when (zero? (bit-and (peek ab) (peek cd)))
+                                [(nth ab 0) (nth ab 1) (nth cd 0) (nth cd 1)]
+                                #_ (into (pop ab) (pop cd))))
+                            (mc/combinations legal-games 2))
+        group-legal-rounds (group-by #(apply bit-or %)
+                                     legal-rounds)]
+    (assert (= (count all-pairs) 36))
+    (assert (= (sort (keys group-legal-rounds)) (sort (map #(bit-clear 511 %) (range 9)))))
+    (assert (every? #(= 315 (count %)) (vals group-legal-rounds)))
+    (when flag
+    (println "all-pairs:" (count all-pairs))
+    (println "legal-games:" (count legal-games))
+    (println "legal-rounds:" (count legal-rounds) "  per bye:" (quot (count legal-rounds) 9)))
+    true)))
+
+
+
 ;;; keep track of opp as vector of player-opp coord, starts all zero
 ;;; should end all 2 except for self which is zero
 ;;; zero-based, players 0-8
@@ -136,71 +203,77 @@
 ;;; probably would be faster to unroll opps into single vector of 81
 ;;; multiply instead of as-pair
 
+;; all-pairs was originally:
+;;   (map #(reduce bit-set 0 %) (mc/combinations (range 9) 2))
+;; but the new code is faster
 
 
 (defn lazy-niners []
-  (let [all-pairs (as-int-set (map #(reduce bit-set 0 %) (mc/combinations (range 9) 2)))
-        opp-init (vec (repeat 9 (vec (repeat 9 0))))
-        legal-games  (keep (fn [[a b]] (when (zero? (bit-and a b)) [a b]))
+  (let [opp-init (vec (repeat 9 (vec (repeat 9 0))))
+        all-pairs (as-int-set (for [a (range 9) :let [pbits (bit-set 0 a)]
+                                    b (range (inc a) 9)]
+                                (bit-set pbits b)))
+        legal-games  (keep (fn [[a b]] (when (zero? (bit-and a b)) [a b (bit-or a b)]))
                            (mc/combinations all-pairs 2))
-        legal-rounds  (keep (fn [[[a b] [c d]]]
-                              (when (= 8 (bs/bcount (bit-or a b c d))) [a b c d]))
-                            (mc/combinations legal-games 2))
+        legal-rounds (keep (fn [[ab cd]]
+                             (when (zero? (bit-and (peek ab) (peek cd)))
+                               [(nth ab 0) (nth ab 1) (nth cd 0) (nth cd 1)]))
+                           (mc/combinations legal-games 2))
         group-legal-rounds (group-by #(Long/numberOfTrailingZeros (apply bit-and-not 511 %))
-                                  legal-rounds)]
+                                     legal-rounds)]
 
-   (for [a (get group-legal-rounds 0)
-         :let [ua (as-int-set a)]
-         :let [oppa (assign-opps opp-init a)]
-         :when oppa
+    (for [a (get group-legal-rounds 0)
+          :let [ua (as-int-set a)]
+          :let [oppa (assign-opps opp-init a)]
+          :when oppa
 
-         b (get group-legal-rounds 1)
-         :when (not-any? ua b)
-         :let [oppb (assign-opps oppa b)]
-         :when oppb
-         :let [ub (into ua b)]
-         
-         c (get group-legal-rounds 2)
-         :when (not-any? ub c)
-         :let [oppc (assign-opps oppb c)]
-         :when oppc
-         :let [uc (into ub c)]
-         
-         d (get group-legal-rounds 3)
-         :when (not-any? uc d)
-         :let [oppd (assign-opps oppc d)]
-         :when oppd
-         :let [ud (into uc d)]
+          b (get group-legal-rounds 1)
+          :when (not-any? ua b)
+          :let [oppb (assign-opps oppa b)]
+          :when oppb
+          :let [ub (into ua b)]
+          
+          c (get group-legal-rounds 2)
+          :when (not-any? ub c)
+          :let [oppc (assign-opps oppb c)]
+          :when oppc
+          :let [uc (into ub c)]
+          
+          d (get group-legal-rounds 3)
+          :when (not-any? uc d)
+          :let [oppd (assign-opps oppc d)]
+          :when oppd
+          :let [ud (into uc d)]
 
-         e (get group-legal-rounds 4)
-         :when (not-any? ud e)
-         :let [oppe (assign-opps oppd e)]
-         :when oppe
-         :let [ue (into ud e)]
+          e (get group-legal-rounds 4)
+          :when (not-any? ud e)
+          :let [oppe (assign-opps oppd e)]
+          :when oppe
+          :let [ue (into ud e)]
 
-         f (get group-legal-rounds 5)
-         :when (not-any? ue f)
-         :let [oppf (assign-opps oppe f)]
-         :when oppf
-         :let [uf (into ue f)]
+          f (get group-legal-rounds 5)
+          :when (not-any? ue f)
+          :let [oppf (assign-opps oppe f)]
+          :when oppf
+          :let [uf (into ue f)]
 
-         g (get group-legal-rounds 6)
-         :when (not-any? uf g)
-         :let [oppg (assign-opps oppf g)]
-         :when oppg
-         :let [ug (into uf g)]
-         
-         h (get group-legal-rounds 7)
-         :when (not-any? ug h)
-         :let [opph (assign-opps oppg h)]
-         :when opph
-         :let [uh (into ug h)]
-         
-         i (get group-legal-rounds 8)
-         :when (not-any? uh i)
-         :when (assign-opps opph i)]
+          g (get group-legal-rounds 6)
+          :when (not-any? uf g)
+          :let [oppg (assign-opps oppf g)]
+          :when oppg
+          :let [ug (into uf g)]
+          
+          h (get group-legal-rounds 7)
+          :when (not-any? ug h)
+          :let [opph (assign-opps oppg h)]
+          :when opph
+          :let [uh (into ug h)]
+          
+          i (get group-legal-rounds 8)
+          :when (not-any? uh i)
+          :when (assign-opps opph i)]
 
-     [a b c d e f g h i])))
+      [a b c d e f g h i])))
 
 ;; about 6.5 sec on my iMac
 (defn niner [] (first (lazy-niners)))
