@@ -68,8 +68,8 @@
   (reduce-kv (fn [stats bye [a b c d]]
                (-> stats
                    (inc-stat [bye :bye])
-                   (add-game-stats (low-bit a) (high-bit a) (low-bit b) (low-bit b))
-                   (add-game-stats (low-bit c) (high-bit c) (low-bit d) (low-bit d))))
+                   (add-game-stats (low-bit a) (high-bit a) (low-bit b) (high-bit b))
+                   (add-game-stats (low-bit c) (high-bit c) (low-bit d) (high-bit d))))
           {}
           rows))
 
@@ -281,7 +281,7 @@
 
 ;;; one-based for display
 (defn pair-str [pbits]
-  (str (inc (Long/numberOfTrailingZeros (Long/lowestOneBit pbits))) "+"
+  (str (inc (Long/numberOfTrailingZeros pbits)) "+"
        (inc (Long/numberOfTrailingZeros (Long/highestOneBit pbits)))))
 
 (defn print-sched [niner]
@@ -291,6 +291,10 @@
              "   " (pair-str c) "vs" (pair-str d)))
   (println))
 
+
+(def expected-niner
+  [[6 24 96 384] [5 160 72 272] [3 320 48 136] [17 192 34 260] [9 288 68 130]
+   [12 65 144 258] [18 33 132 264] [20 257 40 66] [10 129 36 80]])
 
 
 ;; not sure how many solutions, but at least 20.  100 was taking to long so I aborted
@@ -304,4 +308,13 @@
 ;;;
 ;;; Maybe rewrite whole thing and generate rounds on the fly since it's only needed once
 ;;; A lot of this work is now done at load time.
+
+
+#_
+(time (last (take 25 (lazy-niners))))
+;; "Elapsed time: 15873.597243 msecs"
+;;=> [[6 24 96 384] [5 320 40 144] [3 160 80 264] [17 192 34 260] [9 288 68 130]
+;;    [10 65 132 272] [20 33 136 258] [18 257 36 72] [12 129 48 66]]
+
+(defn millis [] (.millis (java.time.Clock/systemDefaultZone)))
 
