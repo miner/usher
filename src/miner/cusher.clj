@@ -84,7 +84,8 @@
   (and (= (count (keys stats)) 9)
        (every? (fn [[player pstats]] (valid-player? player pstats)) stats)))
 
-
+(defn verify-niner? [niner]
+  (verify-stats? (stats niner)))
 
 
 (defn as-int-set
@@ -318,3 +319,9 @@
 
 (defn millis [] (.millis (java.time.Clock/systemDefaultZone)))
 
+
+
+#_ (time (last (take 45 (lazy-niners))))
+;; "Elapsed time: 68820.437288 msecs"
+;; => [[6 24 96 384] [12 288 17 192] [34 144 65 264] [5 160 18 320] [33 258 72 132]
+;;     [3 68 136 272] [9 48 130 260] [20 257 40 66] [10 129 36 80]]
