@@ -64,14 +64,20 @@
            [c :with d] [c :against a] [c :against b]
            [d :with c] [d :against a] [d :against b]]))
 
+
+(defn unique-games? [rows]
+  (distinct? (mapcat (fn [[a b c d]] (list (bit-or a b) (bit-or c d))) rows)))
+
+
 (defn stats [rows]
-  (reduce-kv (fn [stats bye [a b c d]]
-               (-> stats
-                   (inc-stat [bye :bye])
-                   (add-game-stats (low-bit a) (high-bit a) (low-bit b) (high-bit b))
-                   (add-game-stats (low-bit c) (high-bit c) (low-bit d) (high-bit d))))
-          {}
-          rows))
+  (when (unique-games? rows)
+    (reduce-kv (fn [stats bye [a b c d]]
+                 (-> stats
+                     (inc-stat [bye :bye])
+                     (add-game-stats (low-bit a) (high-bit a) (low-bit b) (high-bit b))
+                     (add-game-stats (low-bit c) (high-bit c) (low-bit d) (high-bit d))))
+               {}
+               rows)))
 
 (defn valid-player? [player pstats]
   (and (= (:bye pstats) 1)
