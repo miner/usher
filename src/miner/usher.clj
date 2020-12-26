@@ -1,4 +1,4 @@
-(ns miner.cusher
+(ns miner.usher
   (:require
    clojure.pprint
    [miner.bitset :as bs]
@@ -140,29 +140,33 @@
 (defn experiment
   ([] (experiment false))
   ([flag]
-  (let [all-pairs (as-int-set (for [a (range 9) :let [pbits (bit-set 0 a)]
-                                    b (range (inc a) 9)]
-                                (bit-set pbits b)))
-        opp-init (vec (repeat 9 (vec (repeat 9 0))))
-        legal-games  (keep (fn [[a b]] (when (zero? (bit-and a b)) [a b (bit-or a b)]))
-                           (mc/combinations all-pairs 2))
-        legal-rounds #_ (keep (fn [[[a b ab] [c d cd]]]
+   (let [all-pairs (as-int-set (for [a (range 9) :let [pbits (bit-set 0 a)]
+                                     b (range (inc a) 9)]
+                                 (bit-set pbits b)))
+         opp-init (vec (repeat 9 (vec (repeat 9 0))))
+         legal-games  (keep (fn [[a b]] (when (zero? (bit-and a b)) [a b (bit-or a b)]))
+                            (mc/combinations all-pairs 2))
+         legal-rounds #_ (keep (fn [[[a b ab] [c d cd]]]
                                  (when (zero? (bit-and ab cd)) [a b c d]))
-                              (mc/combinations legal-games 2))
-                         (keep (fn [[ab cd]]
-                                 (when (zero? (bit-and (peek ab) (peek cd)))
-                                   [(nth ab 0) (nth ab 1) (nth cd 0) (nth cd 1)]))
-              (mc/combinations legal-games 2))
-        group-legal-rounds (group-by #(Long/numberOfTrailingZeros (apply bit-and-not 511 %))
-                                     legal-rounds)]
-    (assert (= (count all-pairs) 36))
-    (assert (= (sort (keys group-legal-rounds)) (range 9)))
-    (assert (every? #(= 315 (count %)) (vals group-legal-rounds)))
-    (when flag
-    (println "all-pairs:" (count all-pairs))
-    (println "legal-games:" (count legal-games))
-    (println "legal-rounds:" (count legal-rounds) "  per bye:" (quot (count legal-rounds) 9)))
-    true)))
+                               (mc/combinations legal-games 2))
+         (keep (fn [[ab cd]]
+                 (when (zero? (bit-and (peek ab) (peek cd)))
+                   [(nth ab 0) (nth ab 1) (nth cd 0) (nth cd 1)]))
+               (mc/combinations legal-games 2))
+         group-legal-rounds (group-by #(Long/numberOfTrailingZeros (apply bit-and-not 511 %))
+                                      legal-rounds)]
+     (assert (= (count all-pairs) 36))
+     (assert (= (sort (keys group-legal-rounds)) (range 9)))
+     (assert (every? #(= 315 (count %)) (vals group-legal-rounds)))
+     (if flag
+       (do (println "all-pairs:" (count all-pairs))
+           (println "legal-games:" (count legal-games))
+           (println "legal-rounds:" (count legal-rounds) "  per bye:"
+                    (quot (count legal-rounds) 9))
+           (println "returning group-legal-rounds")
+           group-legal-rounds)
+       true))))
+
 
 
 ;; not faster with into/pop
@@ -189,11 +193,14 @@
     (assert (= (count all-pairs) 36))
     (assert (= (sort (keys group-legal-rounds)) (sort (map #(bit-clear 511 %) (range 9)))))
     (assert (every? #(= 315 (count %)) (vals group-legal-rounds)))
-    (when flag
-    (println "all-pairs:" (count all-pairs))
-    (println "legal-games:" (count legal-games))
-    (println "legal-rounds:" (count legal-rounds) "  per bye:" (quot (count legal-rounds) 9)))
-    true)))
+    (if flag
+      (do (println "all-pairs:" (count all-pairs))
+          (println "legal-games:" (count legal-games))
+          (println "legal-rounds:" (count legal-rounds) "  per bye:"
+                   (quot (count legal-rounds) 9))
+          (println "returning group-legal-rounds")
+          group-legal-rounds)
+      true))))
 
 
 
@@ -325,3 +332,74 @@
 ;; "Elapsed time: 68820.437288 msecs"
 ;; => [[6 24 96 384] [12 288 17 192] [34 144 65 264] [5 160 18 320] [33 258 72 132]
 ;;     [3 68 136 272] [9 48 130 260] [20 257 40 66] [10 129 36 80]]
+
+
+
+
+
+
+
+
+;;; https://math.stackexchange.com/questions/2237894/in-how-many-ways-can-you-arrange-4n-tennis-players-into-doubles-matches
+
+(defn fact [n]
+  (reduce * (range 1 (inc n))))
+
+(defn ** [a b]
+  (reduce * (repeat b a)))
+
+(defn count-arrangements-for-courts [n]
+  ;; n courts
+  (/ (fact (* 4 n))
+     (* (fact n) (** 2 (* 3 n)))))
+  
+  
+#_ (count-arrangements-for-courts 2)
+;;=>  315
+;; That's exactly how many legal rounds we get per bye for our nine-player solution. Hmmm...
+;; Could we just enumerate those and substitute for the bye player?
+
+
+;; (mc/count-combinations (range 9) 2)  => 36
+;; 36 pairs to start from 9 players
+;;
+
+;; (mc/count-combinations (range 36) 2)  => 630
+;; legal games 630
+
+;; that's double 315 rounds per bye, but why exactly?  A round is two games
+;;
+;;  WRONG REASON but we don't care about order of teams so we only get half the combinations
+;; for legal games.  
+
+
+
+(defn BADnormalize [rounds]
+  (sort (map (fn [[a b c d]] (vector (bit-or a b) (bit-or c d))) rounds)))
+
+;;; wrong on bit-test -clear because old is still there--- but sub was guaranteed not there???
+;;; need to rotate all bits (I think)
+
+(defn BADrenormalize [rounds player sub]
+  (let [gsub (fn [a b]
+               (let [g (bit-or a b)]
+                 (if (bit-test g player)
+                   (-> g (bit-clear player) (bit-set sub))
+                   g)))]
+    (sort (map (fn [[a b c d]] (vector (sort (list (gsub a b) (gsub c d))))) rounds))))
+
+;;;  renormalize does not seem to work so maybe there is a deeper problem with the original
+;;;  generation
+
+
+
+(defn renormalize [rounds player sub]
+  (let [gsub (fn [p]
+               (if (bit-test p player)
+                   (-> p (bit-clear player) (bit-set sub))
+                   p))]
+    (sort (map (fn [p4] (mapv gsub p4)) rounds))))
+
+
+;; (mc/count-combinations (range 36) 2)  ==> 630 legal games
+;;   divide by two games per round  ==> 315 rounds  ????  but does that cover all mixes?

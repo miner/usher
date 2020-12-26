@@ -10,10 +10,19 @@
 (def ^:const b-empty 0)
 
 
+(def bempty? zero?)
+
 (defn bcount [^long b]
   (Long/bitCount b))
 
-(def bempty? zero?)
+;; returns index of high bit 63-0 or nil if n=0
+(defn bmax [n]
+  {:pre [(not (zero? n))]}
+  (- 63 (Long/numberOfLeadingZeros n)))
+
+(defn bmin [n]
+  {:pre [(not (zero? n))]}
+  (Long/numberOfTrailingZeros n))
   
 (defn bconj
   ([b i] (bit-set b i))
@@ -26,7 +35,7 @@
 (defn bcontains?
   ([b i] (bit-test b i))
   ([b i & more] (and (bit-test b i)
-                     (empty? (sequence (remove #(bit-test b %)) more)))))
+                     (every? #(bit-test b %) more))))
 
 ;; indices is collection of longs
 (defn bsome? [b indices]
@@ -74,18 +83,8 @@
       (let [h (Long/lowestOneBit n)]
         (recur (bit-and-not n h) (conj! bs (Long/numberOfTrailingZeros h)))))))
 
-;; returns index of high bit 63-0 or nil if n=0
-(defn high-bit-index [^long n]
-  (when-not (zero? n)
-    (Long/numberOfTrailingZeros (Long/highestOneBit n))))
-
-(defn low-bit-index [^long n]
-  (when-not (zero? n)
-    (Long/numberOfTrailingZeros (Long/lowestOneBit n))))
-
 (defn bsingle? [^long n]
   (= (Long/bitCount n) 1))
-  
 
 (defn bsubset? [bsub bsuper]
   (= bsuper (bit-or bsub bsuper)))
@@ -113,8 +112,6 @@
      (if (pos? pad)
        (str (subs "0000000000000000" 0 pad) hs)
        hs))))
-
-
 
 (defn hexstr2
   ([^long n] (clojure.string/upper-case (Long/toHexString n)))
