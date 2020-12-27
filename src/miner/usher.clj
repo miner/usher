@@ -102,6 +102,7 @@
 
 
 (defn as-int-set
+  ([] (i/dense-int-set))
   ([icoll] (into (i/dense-int-set) icoll))
   ([xform coll] (into (i/dense-int-set) xform coll)))
 
@@ -386,14 +387,17 @@
 ;;; bye.  Naturally works from 8 bye, going down.  The eight-man candidates are the same as
 ;;; giving 8 a bye so start there and renormalize for each round.
 ;;;
-;;; works only if sub is the known bye -- that is does not already exist in rounds
-(defn renormalize [rounds player]
-  (let [bye (find-bye (first rounds))
+;;; rounds must be consistently clear for bye0 bit
+;;; next-round adjusts to the "next" bye (decrementing) or nil for done
+(defn next-rounds [rounds]
+  (let [bye0 (find-bye (first rounds))
+        bye1 (dec bye0)
         gsub (fn [p]
-               (if (bit-test p player)
-                   (-> p (bit-clear player) (bit-set bye))
+               (if (bit-test p bye1)
+                   (-> p (bit-clear bye1) (bit-set bye0))
                    p))]
-    (sort (map (fn [p4] (mapv gsub p4)) rounds))))
+    (when (pos? bye0)
+      (map (fn [p4] (mapv gsub p4)) rounds))))
 
 
 ;; (mc/count-combinations (range 36) 2)  ==> 630 legal games
@@ -417,14 +421,165 @@
          legal-rounds (keep (fn [[ab cd]]
                               (when (zero? (bit-and (peek ab) (peek cd)))
                                 [(nth ab 0) (nth ab 1) (nth cd 0) (nth cd 1)]))
-                            (mc/combinations legal-games 2))]
+                            (mc/combinations legal-games 2))
+         bye-rounds (into () (take 9) (iterate next-rounds legal-rounds))]
 
      (if flag
        (do (println "8 all-pairs:" (count all-pairs))
            (println "8 legal-games:" (count legal-games))
            (println "8 legal-rounds:" (count legal-rounds))
-           (count legal-rounds))
-      legal-rounds))))
+           (count bye-rounds))
+      bye-rounds))))
+
+
+;;; slightly slower
+(defn lazy-exp8-slower []
+  (let [opp-init (vec (repeat 9 (vec (repeat 9 0))))
+        all-pairs (as-int-set (for [a (range 8) :let [pbits (bit-set 0 a)]
+                                    b (range (inc a) 8)]
+                                (bit-set pbits b)))
+        legal-games  (keep (fn [[a b]] (when (zero? (bit-and a b)) [a b (bit-or a b)]))
+                           (mc/combinations all-pairs 2))
+        legal-rounds (keep (fn [[ab cd]]
+                             (when (zero? (bit-and (peek ab) (peek cd)))
+                               [(nth ab 0) (nth ab 1) (nth cd 0) (nth cd 1)]))
+                           (mc/combinations legal-games 2))
+        rounds-by-bye (vec (into () (take 9) (iterate next-rounds legal-rounds)))]
+
+    (for [a (nth rounds-by-bye 0)
+          :let [ua (as-int-set a)]
+          :let [oppa (assign-opps opp-init a)]
+          :when oppa
+
+          b (nth rounds-by-bye 1)
+          :when (not-any? ua b)
+          :let [oppb (assign-opps oppa b)]
+          :when oppb
+          :let [ub (into ua b)]
+          
+          c (nth rounds-by-bye 2)
+          :when (not-any? ub c)
+          :let [oppc (assign-opps oppb c)]
+          :when oppc
+          :let [uc (into ub c)]
+
+          d (nth rounds-by-bye 3)
+          :when (not-any? uc d)
+          :let [oppd (assign-opps oppc d)]
+          :when oppd
+          :let [ud (into uc d)]
+
+          e (nth rounds-by-bye 4)
+          :when (not-any? ud e)
+          :let [oppe (assign-opps oppd e)]
+          :when oppe
+          :let [ue (into ud e)]
+
+          f (nth rounds-by-bye 5)
+          :when (not-any? ue f)
+          :let [oppf (assign-opps oppe f)]
+          :when oppf
+          :let [uf (into ue f)]
+
+          g (nth rounds-by-bye 6)
+          :when (not-any? uf g)
+          :let [oppg (assign-opps oppf g)]
+          :when oppg
+          :let [ug (into uf g)]
+          
+          h (nth rounds-by-bye 7)
+          :when (not-any? ug h)
+          :let [opph (assign-opps oppg h)]
+          :when opph
+          :let [uh (into ug h)]
+
+          i (nth rounds-by-bye 8)
+          :when (not-any? uh i)
+          :when (assign-opps opph i)]
+
+      [a b c d e f g h i])))
+
+
+
+
+;; (defn lazy-exp8 []
+;;   (let [opp-init (vec (repeat 9 (vec (repeat 9 0))))
+;;         all-pairs (as-int-set (for [a (range 8) :let [pbits (bit-set 0 a)]
+;;                                     b (range (inc a) 8)]
+;;                                 (bit-set pbits b)))
+;;         legal-games  (keep (fn [[a b]] (when (zero? (bit-and a b)) [a b (bit-or a b)]))
+;;                            (mc/combinations all-pairs 2))
+;;         legal-rounds (keep (fn [[ab cd]]
+;;                              (when (zero? (bit-and (peek ab) (peek cd)))
+;;                                [(nth ab 0) (nth ab 1) (nth cd 0) (nth cd 1)]))
+;;                            (mc/combinations legal-games 2))]
+;; 
+;;     
+;; 
+;; 
+;;     (loop [bye 8 rnds legal-rounds stack [{:used (as-int-set) :opp opp-init :rounds nil}]]
+;;       (cond (empty? rnds) (recur (dec bye) (next-rounds rnds
+;; 
+;;     (for [a (nth rounds-by-bye 0)
+;;           :let [ua (as-int-set a)]
+;;           :let [oppa (assign-opps opp-init a)]
+;;           :when oppa
+;; 
+;;           b (nth rounds-by-bye 1)
+;;           :when (not-any? ua b)
+;;           :let [oppb (assign-opps oppa b)]
+;;           :when oppb
+;;           :let [ub (into ua b)]
+;;           
+;;           c (nth rounds-by-bye 2)
+;;           :when (not-any? ub c)
+;;           :let [oppc (assign-opps oppb c)]
+;;           :when oppc
+;;           :let [uc (into ub c)]
+;; 
+;;           d (nth rounds-by-bye 3)
+;;           :when (not-any? uc d)
+;;           :let [oppd (assign-opps oppc d)]
+;;           :when oppd
+;;           :let [ud (into uc d)]
+;; 
+;;           e (nth rounds-by-bye 4)
+;;           :when (not-any? ud e)
+;;           :let [oppe (assign-opps oppd e)]
+;;           :when oppe
+;;           :let [ue (into ud e)]
+;; 
+;;           f (nth rounds-by-bye 5)
+;;           :when (not-any? ue f)
+;;           :let [oppf (assign-opps oppe f)]
+;;           :when oppf
+;;           :let [uf (into ue f)]
+;; 
+;;           g (nth rounds-by-bye 6)
+;;           :when (not-any? uf g)
+;;           :let [oppg (assign-opps oppf g)]
+;;           :when oppg
+;;           :let [ug (into uf g)]
+;;           
+;;           h (nth rounds-by-bye 7)
+;;           :when (not-any? ug h)
+;;           :let [opph (assign-opps oppg h)]
+;;           :when opph
+;;           :let [uh (into ug h)]
+;; 
+;;           i (nth rounds-by-bye 8)
+;;           :when (not-any? uh i)
+;;           :when (assign-opps opph i)]
+;; 
+;;       [a b c d e f g h i])))
+;; 
+;; 
+;; 
+
+
+
+
+
 
 
 
