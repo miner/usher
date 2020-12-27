@@ -94,7 +94,7 @@
 
 (defn bstr
   ([^long n] (Long/toBinaryString n))
-  ([^long n width]
+  ([^long width n]
    {:pre [(<= 0 width 64)]}
    (let [bs (bstr n)
          pad (- width (count bs))]
@@ -105,7 +105,7 @@
 
 (defn hexstr
   ([^long n] (clojure.string/upper-case (Long/toHexString n)))
-  ([^long n width]
+  ([^long width n]
    {:pre [(<= 0 width 16)]}
    (let [hs (hexstr n)
          pad (- width (count hs))]
@@ -115,7 +115,7 @@
 
 (defn hexstr2
   ([^long n] (clojure.string/upper-case (Long/toHexString n)))
-  ([^long n width]
+  ([^long width n]
    {:pre [(<= 0 width 16)]}
    (let [hs (hexstr n)
          len (count hs)]

@@ -68,16 +68,21 @@
 (defn unique-games? [rows]
   (distinct? (mapcat (fn [[a b c d]] (list (bit-or a b) (bit-or c d))) rows)))
 
+;; round [abcd]
+(defn find-bye [[a b c d]]
+  (let [bits (bit-and-not 511 a b c d)]
+    (when (= (bs/bcount bits) 1)
+      (bs/bmin bits))))
 
+;;; bye is assumed not checked
 (defn stats [rows]
-  (when (unique-games? rows)
-    (reduce-kv (fn [stats bye [a b c d]]
-                 (-> stats
-                     (inc-stat [bye :bye])
-                     (add-game-stats (low-bit a) (high-bit a) (low-bit b) (high-bit b))
-                     (add-game-stats (low-bit c) (high-bit c) (low-bit d) (high-bit d))))
-               {}
-               rows)))
+  (reduce-kv (fn [stats bye [a b c d]]
+               (-> stats
+                   (inc-stat [bye :bye])
+                   (add-game-stats (low-bit a) (high-bit a) (low-bit b) (high-bit b))
+                   (add-game-stats (low-bit c) (high-bit c) (low-bit d) (high-bit d))))
+             {}
+             rows))
 
 (defn valid-player? [player pstats]
   (and (= (:bye pstats) 1)
@@ -91,7 +96,9 @@
        (every? (fn [[player pstats]] (valid-player? player pstats)) stats)))
 
 (defn verify-niner? [niner]
-  (verify-stats? (stats niner)))
+  (and (unique-games? niner)
+       (= (map find-bye niner) (range 9))
+       (verify-stats? (stats niner))))
 
 
 (defn as-int-set
@@ -152,13 +159,10 @@
          opp-init (vec (repeat 9 (vec (repeat 9 0))))
          legal-games  (keep (fn [[a b]] (when (zero? (bit-and a b)) [a b (bit-or a b)]))
                             (mc/combinations all-pairs 2))
-         legal-rounds #_ (keep (fn [[[a b ab] [c d cd]]]
-                                 (when (zero? (bit-and ab cd)) [a b c d]))
-                               (mc/combinations legal-games 2))
-         (keep (fn [[ab cd]]
-                 (when (zero? (bit-and (peek ab) (peek cd)))
-                   [(nth ab 0) (nth ab 1) (nth cd 0) (nth cd 1)]))
-               (mc/combinations legal-games 2))
+         legal-rounds (keep (fn [[ab cd]]
+                              (when (zero? (bit-and (peek ab) (peek cd)))
+                                [(nth ab 0) (nth ab 1) (nth cd 0) (nth cd 1)]))
+                            (mc/combinations legal-games 2))
          group-legal-rounds (group-by #(Long/numberOfTrailingZeros (apply bit-and-not 511 %))
                                       legal-rounds)]
      (assert (= (count all-pairs) 36))
@@ -409,3 +413,50 @@
 
 ;; (mc/count-combinations (range 36) 2)  ==> 630 legal games
 ;;   divide by two games per round  ==> 315 rounds  ????  but does that cover all mixes?
+
+
+;;; To use Tarantella we need vector of bits for each possibility.  Solution is subset that
+;;; covers all bits.
+
+;;; 9 players, 9 rounds, 1 bye + 8 players per round, 2games per round = 18 games, 2 sides
+;;; per game = 36 sides
+
+
+
+;;; considering per round, 1 bye, 8 players -- should be symmetric for other rounds
+;;; probably needs a rotation of players, not just a substitution
+;;; (mc/count-combinations (range 8) 2) => 28
+;;; exp8 gives 315 rounds
+
+(defn exp8
+  ([] (exp8 true))
+  ([flag]
+   (let [all-pairs (as-int-set (for [a (range 8) :let [pbits (bit-set 0 a)]
+                                     b (range (inc a) 8)]
+                                 (bit-set pbits b)))
+         opp-init (vec (repeat 8 (vec (repeat 8 0))))
+         legal-games  (keep (fn [[a b]] (when (zero? (bit-and a b)) [a b (bit-or a b)]))
+                            (mc/combinations all-pairs 2))
+         legal-rounds (keep (fn [[ab cd]]
+                              (when (zero? (bit-and (peek ab) (peek cd)))
+                                [(nth ab 0) (nth ab 1) (nth cd 0) (nth cd 1)]))
+                            (mc/combinations legal-games 2))]
+
+     (if flag
+       (do (println "8 all-pairs:" (count all-pairs))
+           (println "8 legal-games:" (count legal-games))
+           (println "8 legal-rounds:" (count legal-rounds))
+           (count legal-rounds))
+       true))))
+
+
+
+;;; 43210  rot 2
+;;; 21043
+
+;; rotate pos to left
+(defn rotate-bits [width bits n]
+  (bit-or (bit-and (bit-shift-left bits n) (dec (bit-set 0 width)))
+          (bit-and (unsigned-bit-shift-right bits (- width n)) (dec (bit-set 0 n)))))
+
+  
