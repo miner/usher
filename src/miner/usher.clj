@@ -382,45 +382,22 @@
 ;;  WRONG REASON but we don't care about order of teams so we only get half the combinations
 ;; for legal games.  
 
-
-
-(defn BADnormalize [rounds]
-  (sort (map (fn [[a b c d]] (vector (bit-or a b) (bit-or c d))) rounds)))
-
-;;; wrong on bit-test -clear because old is still there--- but sub was guaranteed not there???
-;;; need to rotate all bits (I think)
-
-(defn BADrenormalize [rounds player sub]
-  (let [gsub (fn [a b]
-               (let [g (bit-or a b)]
-                 (if (bit-test g player)
-                   (-> g (bit-clear player) (bit-set sub))
-                   g)))]
-    (sort (map (fn [[a b c d]] (vector (sort (list (gsub a b) (gsub c d))))) rounds))))
-
-;;;  renormalize does not seem to work so maybe there is a deeper problem with the original
-;;;  generation
-
-
-
-(defn renormalize [rounds player sub]
-  (let [gsub (fn [p]
+;;; renormalize will give you next round of candidates, substituting player for the previous
+;;; bye.  Naturally works from 8 bye, going down.  The eight-man candidates are the same as
+;;; giving 8 a bye so start there and renormalize for each round.
+;;;
+;;; works only if sub is the known bye -- that is does not already exist in rounds
+(defn renormalize [rounds player]
+  (let [bye (find-bye (first rounds))
+        gsub (fn [p]
                (if (bit-test p player)
-                   (-> p (bit-clear player) (bit-set sub))
+                   (-> p (bit-clear player) (bit-set bye))
                    p))]
     (sort (map (fn [p4] (mapv gsub p4)) rounds))))
 
 
 ;; (mc/count-combinations (range 36) 2)  ==> 630 legal games
 ;;   divide by two games per round  ==> 315 rounds  ????  but does that cover all mixes?
-
-
-;;; To use Tarantella we need vector of bits for each possibility.  Solution is subset that
-;;; covers all bits.
-
-;;; 9 players, 9 rounds, 1 bye + 8 players per round, 2games per round = 18 games, 2 sides
-;;; per game = 36 sides
-
 
 
 ;;; considering per round, 1 bye, 8 players -- should be symmetric for other rounds
@@ -447,16 +424,33 @@
            (println "8 legal-games:" (count legal-games))
            (println "8 legal-rounds:" (count legal-rounds))
            (count legal-rounds))
-       true))))
+      legal-rounds))))
 
 
 
 ;;; 43210  rot 2
 ;;; 21043
 
+
+;;; probably don't need this
 ;; rotate pos to left
 (defn rotate-bits [width bits n]
   (bit-or (bit-and (bit-shift-left bits n) (dec (bit-set 0 width)))
           (bit-and (unsigned-bit-shift-right bits (- width n)) (dec (bit-set 0 n)))))
 
-  
+
+;;; new idea: do the eight-man problem and replace bits to extend for nine
+;;; exp8  and renormalize per round
+
+
+
+
+
+
+;;; To use Tarantella we need vector of bits for each possibility.  Solution is subset that
+;;; covers all bits.
+
+;;; 9 players, 9 rounds, 1 bye + 8 players per round, 2games per round = 18 games, 2 sides
+;;; per game = 36 sides
+
+
