@@ -1,7 +1,6 @@
 (ns miner.usher
   (:require
    clojure.pprint
-   [miner.bitset :as bs]
    [clojure.data.int-map :as i]
    [clojure.math.combinatorics :as mc]))
 
@@ -46,6 +45,11 @@
   [(low-bit pbits) (high-bit pbits)])
 
 
+(defn bcount [^long b]
+  (Long/bitCount b))
+
+
+
 ;; questionable -- maybe faster than nested vectors
 (defn ind9 [a b]
   (+ (* a 9) b))
@@ -71,8 +75,8 @@
 ;; round [abcd]
 (defn find-bye [[a b c d]]
   (let [bits (bit-and-not 511 a b c d)]
-    (when (= (bs/bcount bits) 1)
-      (bs/bmin bits))))
+    (when (= (bcount bits) 1)
+      (low-bit bits))))
 
 ;;; bye is assumed not checked
 (defn stats [rows]
@@ -502,97 +506,12 @@
 
 
 
-;; (defn lazy-exp8 []
-;;   (let [opp-init (vec (repeat 9 (vec (repeat 9 0))))
-;;         all-pairs (as-int-set (for [a (range 8) :let [pbits (bit-set 0 a)]
-;;                                     b (range (inc a) 8)]
-;;                                 (bit-set pbits b)))
-;;         legal-games  (keep (fn [[a b]] (when (zero? (bit-and a b)) [a b (bit-or a b)]))
-;;                            (mc/combinations all-pairs 2))
-;;         legal-rounds (keep (fn [[ab cd]]
-;;                              (when (zero? (bit-and (peek ab) (peek cd)))
-;;                                [(nth ab 0) (nth ab 1) (nth cd 0) (nth cd 1)]))
-;;                            (mc/combinations legal-games 2))]
-;; 
-;;     
-;; 
-;; 
-;;     (loop [bye 8 rnds legal-rounds stack [{:used (as-int-set) :opp opp-init :rounds nil}]]
-;;       (cond (empty? rnds) (recur (dec bye) (next-rounds rnds
-;; 
-;;     (for [a (nth rounds-by-bye 0)
-;;           :let [ua (as-int-set a)]
-;;           :let [oppa (assign-opps opp-init a)]
-;;           :when oppa
-;; 
-;;           b (nth rounds-by-bye 1)
-;;           :when (not-any? ua b)
-;;           :let [oppb (assign-opps oppa b)]
-;;           :when oppb
-;;           :let [ub (into ua b)]
-;;           
-;;           c (nth rounds-by-bye 2)
-;;           :when (not-any? ub c)
-;;           :let [oppc (assign-opps oppb c)]
-;;           :when oppc
-;;           :let [uc (into ub c)]
-;; 
-;;           d (nth rounds-by-bye 3)
-;;           :when (not-any? uc d)
-;;           :let [oppd (assign-opps oppc d)]
-;;           :when oppd
-;;           :let [ud (into uc d)]
-;; 
-;;           e (nth rounds-by-bye 4)
-;;           :when (not-any? ud e)
-;;           :let [oppe (assign-opps oppd e)]
-;;           :when oppe
-;;           :let [ue (into ud e)]
-;; 
-;;           f (nth rounds-by-bye 5)
-;;           :when (not-any? ue f)
-;;           :let [oppf (assign-opps oppe f)]
-;;           :when oppf
-;;           :let [uf (into ue f)]
-;; 
-;;           g (nth rounds-by-bye 6)
-;;           :when (not-any? uf g)
-;;           :let [oppg (assign-opps oppf g)]
-;;           :when oppg
-;;           :let [ug (into uf g)]
-;;           
-;;           h (nth rounds-by-bye 7)
-;;           :when (not-any? ug h)
-;;           :let [opph (assign-opps oppg h)]
-;;           :when opph
-;;           :let [uh (into ug h)]
-;; 
-;;           i (nth rounds-by-bye 8)
-;;           :when (not-any? uh i)
-;;           :when (assign-opps opph i)]
-;; 
-;;       [a b c d e f g h i])))
-;; 
-;; 
-;; 
 
 
 
-
-
-
-
-
+;;; Note Long has a rotateBits if you need it.
 ;;; 43210  rot 2
 ;;; 21043
-
-
-;;; probably don't need this
-;; rotate pos to left
-(defn rotate-bits [width bits n]
-  (bit-or (bit-and (bit-shift-left bits n) (dec (bit-set 0 width)))
-          (bit-and (unsigned-bit-shift-right bits (- width n)) (dec (bit-set 0 n)))))
-
 
 ;;; new idea: do the eight-man problem and replace bits to extend for nine
 ;;; exp8  and renormalize per round
