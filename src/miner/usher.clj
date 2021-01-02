@@ -230,7 +230,6 @@
 ;;   (map #(reduce bit-set 0 %) (mc/combinations (range 9) 2))
 ;; but the new code is faster
 
-
 (defn lazy-niners []
   (let [opp-init (vec (repeat 9 (vec (repeat 9 0))))
         all-pairs (as-int-set (for [a (range 9) :let [pbits (bit-set 0 a)]
@@ -243,60 +242,67 @@
                                [(nth ab 0) (nth ab 1) (nth cd 0) (nth cd 1)]))
                            (mc/combinations legal-games 2))
         group-legal-rounds (group-by #(Long/numberOfTrailingZeros (apply bit-and-not 511 %))
-                                     legal-rounds)]
+                                     legal-rounds)
+        opp opp-init
+        used (as-int-set)]
 
     (for [a (get group-legal-rounds 0)
-          :let [ua (as-int-set a)]
-          :let [oppa (assign-opps opp-init a)]
-          :when oppa
+          ;; :when (not-any? used a)  don't need to check on first but wouldn't hurt
+          :let [opp (assign-opps opp a)]
+          :when opp
+          :let [used (into used a)]
 
           b (get group-legal-rounds 1)
-          :when (not-any? ua b)
-          :let [oppb (assign-opps oppa b)]
-          :when oppb
-          :let [ub (into ua b)]
+          :when (not-any? used b)
+          :let [opp (assign-opps opp b)]
+          :when opp
+          :let [used (into used b)]
           
           c (get group-legal-rounds 2)
-          :when (not-any? ub c)
-          :let [oppc (assign-opps oppb c)]
-          :when oppc
-          :let [uc (into ub c)]
+          :when (not-any? used c)
+          :let [opp (assign-opps opp c)]
+          :when opp
+          :let [used (into used c)]
           
           d (get group-legal-rounds 3)
-          :when (not-any? uc d)
-          :let [oppd (assign-opps oppc d)]
-          :when oppd
-          :let [ud (into uc d)]
+          :when (not-any? used d)
+          :let [opp (assign-opps opp d)]
+          :when opp
+          :let [used (into used d)]
 
           e (get group-legal-rounds 4)
-          :when (not-any? ud e)
-          :let [oppe (assign-opps oppd e)]
-          :when oppe
-          :let [ue (into ud e)]
+          :when (not-any? used e)
+          :let [opp (assign-opps opp e)]
+          :when opp
+          :let [used  (into used e)]
 
           f (get group-legal-rounds 5)
-          :when (not-any? ue f)
-          :let [oppf (assign-opps oppe f)]
-          :when oppf
-          :let [uf (into ue f)]
+          :when (not-any? used f)
+          :let [opp (assign-opps opp f)]
+          :when opp
+          :let [used (into used f)]
 
           g (get group-legal-rounds 6)
-          :when (not-any? uf g)
-          :let [oppg (assign-opps oppf g)]
-          :when oppg
-          :let [ug (into uf g)]
+          :when (not-any? used g)
+          :let [opp (assign-opps opp g)]
+          :when opp
+          :let [used (into used g)]
           
           h (get group-legal-rounds 7)
-          :when (not-any? ug h)
-          :let [opph (assign-opps oppg h)]
-          :when opph
-          :let [uh (into ug h)]
+          :when (not-any? used h)
+          :let [opp (assign-opps opp h)]
+          :when opp
+          :let [used (into used h)]
           
           i (get group-legal-rounds 8)
-          :when (not-any? uh i)
-          :when (assign-opps opph i)]
+          ;; last is special, no lets
+          :when (not-any? used i)
+          :when (assign-opps opp i)]
 
       [a b c d e f g h i])))
+
+
+
 
 ;; about 6.5 sec on my iMac
 (defn niner [] (first (lazy-niners)))
