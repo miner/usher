@@ -10,8 +10,14 @@
 ;;; - sits once, and 
 ;;; - plays against every player at least twice.
 
-
+;;; Original good discussion:
 ;;; http://www.durangobill.com/BridgeCyclicSolutions.html
+
+;;; Norvig also did something like this.  I didn't see his code until much later.  I think
+;;; mine may be better!  :-) But Norvig is always worth reading.
+;;;
+;;; https://github.com/norvig/pytudes/blob/main/ipynb/Pickleball.ipynb
+
 
 ;;; http://www.jdawiseman.com/papers/tournaments/individual-pairs/ip-pure_09.html
 ;;; 9-player round-robin on two courts, players A-I
@@ -326,7 +332,7 @@
    [12 65 144 258] [18 33 132 264] [20 257 40 66] [10 129 36 80]])
 
 
-;; not sure how many solutions, but at least 20.  100 was taking to long so I aborted
+;; not sure how many solutions, but at least 20.  100 was taking too long so I aborted
 
 
 #_ (every? #(verify-stats? (stats %)) (take 20 (niner-all)))
